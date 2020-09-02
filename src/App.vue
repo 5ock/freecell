@@ -10,16 +10,13 @@
         </div>
       </div>
       <div class="putBox_block">
-        <div ref="tempPut_rect" style="margin-right: 88px;">
+        <div ref="tempPut_rect" style="margin-right: 88px; position:relative">
           <div v-for="(item, index) in putCard.tempPut" :key="index"
             :class="{'putBox': !item, 'tempPut': item}"
+            @mousedown="(e)=>{mounsedownEvent(e, item, '', '', 'temp', index)}"
           >
             <img v-if="item" :src="require('./assets/images/'+ numTransformIcon(item.num) +'.png')" width="100" heigth="154">
           </div>
-          <!-- <div class="putBox tempPut"></div>
-          <div class="putBox tempPut"></div>
-          <div class="putBox tempPut"></div>
-          <div class="putBox tempPut"></div> -->
         </div>
         <div ref="sortPut_rect">
           <div v-for="(item, index) in putCard.sort" :key="index"
@@ -27,10 +24,6 @@
             <img v-if="item[0]" :src="require('./assets/images/'+ numTransformIcon(item[item.length-1].num) +'.png')" width="100" heigth="154">
             <span v-else>A</span>
           </div>
-          <!-- <div class="putBox sort">A</div>
-          <div class="putBox sort">A</div>
-          <div class="putBox sort">A</div>
-          <div class="putBox sort">A</div> -->
         </div>
       </div>
       <div class="clearboth"></div>
@@ -78,6 +71,7 @@ export default {
       },
       dragItem: {},
       dragItem_test: {
+        type:'',
         posTop: 0,
         posLeft: 0,
         cards: [],
@@ -99,6 +93,8 @@ export default {
         x: '',
         y: ''
       },
+      tempStartX: '',
+      tempStarty: '',
       lastTimeStemp: ''
     }
   },
@@ -182,26 +178,32 @@ export default {
         return iconPath;
     },
     // mouse Event
-    mounsedownEvent(e, card, col, row) {
+    mounsedownEvent(e, card, col, row, type, tempIndex) {
       // 避免返回未完成就執行
-      if(this.lastTimeStemp && this.lastTimeStemp + 500 > e.timeStamp) return;
-      
-      // let lastNum = this.putCard.base[col].length - 1;
-      // if(type != 'tempPut' && card.num != this.putCard.base[row][lastNum].num) {
-      //   console.log('不是最後一個');
-      //   return;
-      // }
+      if(this.lastTimeStemp && this.lastTimeStemp + 250 > e.timeStamp) return;
 
       // ----------------- drag分離
-      if(!this.isCanDrag(card, col, row)) {
-        return;
-      }      
+      if(type != 'temp' && !this.isCanDrag(card, col, row)) return;
 
-      let lestNum = this.putCard.base[col].length;
       this.dragItem_test.col = col;
-      this.dragItem_test.cards = this.putCard.base[col].splice(row, lestNum - row);
       this.dragItem_test.returning = false;
       this.dragItem_test.draging = true;
+
+      if(type=='temp') {
+        this.dragItem_test.type = 'temp';
+        this.dragItem_test.tempIndex = tempIndex;
+        this.dragItem_test.cards.push(this.putCard.tempPut[tempIndex]);
+        this.tempStartX = 107 + tempIndex *114;
+        this.tempStartY = 69;
+        this.dragItem_test.posTop = 69;
+        this.dragItem_test.posLeft = 107 + tempIndex *114;
+        this.dragItem_test.cards[0].posTop = 0;
+        this.dragItem_test.cards[0].posLeft = 0;
+        this.putCard.tempPut[tempIndex] = '';
+      } else {
+        let lestNum = this.putCard.base[col].length;
+        this.dragItem_test.cards = this.putCard.base[col].splice(row, lestNum - row);
+      }
       // -----------------
 
       this.dragItem = card;
@@ -218,11 +220,17 @@ export default {
       
     },
     mousemoveEvent(e) {
-      let moveLeft = this.mouseStartX - e.clientX;
-      let moveTop = this.mouseStartY - e.clientY;
+      let moveLeft, moveTop;
+      if(this.dragItem_test.type == 'temp') {
+        moveLeft = (e.clientX - this.mouseStartX) + this.tempStartX;
+        moveTop = (e.clientY - this.mouseStartY) + this.tempStartY;;
+      } else {
+        moveLeft = e.clientX - this.mouseStartX;
+        moveTop = e.clientY - this.mouseStartY;
+      }
 
-      this.dragItem_test.posTop = 0 - moveTop;
-      this.dragItem_test.posLeft = 0 - moveLeft;
+      this.dragItem_test.posTop = moveTop;
+      this.dragItem_test.posLeft = moveLeft;
     },
     mouseupEvent(e) {
       let me = this;
@@ -260,12 +268,23 @@ export default {
       // 返回拖曳前位置
       if(!isSucceedDrag) {
         this.dragItem_test.returning = true;
-        this.dragItem_test.posTop = 0;
-        this.dragItem_test.posLeft = 0;
+        if(this.dragItem_test.type=='temp') {
+          this.dragItem_test.posTop = 69;
+          this.dragItem_test.posLeft = 107 + this.dragItem_test.tempIndex *114;
+        } else {
+          this.dragItem_test.posTop = 0;
+          this.dragItem_test.posLeft = 0;
+        }
         setTimeout(()=>{
-          me.putCard.base[me.dragItem_test.col]= me.putCard.base[me.dragItem_test.col].concat(me.dragItem_test.cards);
+          if(this.dragItem_test.type=='temp') {
+            let tempIndex = this.dragItem_test.tempIndex;
+            this.putCard.tempPut[tempIndex] = this.dragItem_test.cards[0];
+          } else {
+            me.putCard.base[me.dragItem_test.col]= me.putCard.base[me.dragItem_test.col].concat(me.dragItem_test.cards);
+          }
           me.dragItem_test.cards = [];
-        }, 500);
+          me.dragItem_test.type = '';
+        }, 250);
       }
 
       document.documentElement.removeEventListener('mousemove', this.mousemoveEvent);
@@ -299,6 +318,7 @@ export default {
         this.dragItem_test.cards = [];
         this.dragItem_test.posTop = 0;
         this.dragItem_test.posLeft = 0;
+        this.dragItem_test.type = '';
         this.lastTimeStemp = '';
         return true;
       } else {
@@ -458,7 +478,7 @@ body {
   }
 }
 .transition {
-  transition: all 0.5s;
+  transition: all 0.25s;
   z-index: 1;
 }
 .zindex {
