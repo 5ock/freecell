@@ -1,12 +1,11 @@
 <template>
   <div class="main">
-    <div>x: {{mousex}}, y: {{mousey}}</div>
     <div class="header">
       <div class="top">
         <div class="title">Freecell</div>
         <div class="countAndTime">count | time</div>
         <div class="btn">
-          <img src="./assets/images/Menu.svg" width="30" style="margin-top:13px;">
+          <img @click="restart" src="./assets/images/Menu.svg" width="30" style="margin-top:13px;">
         </div>
       </div>
       <div class="putBox_block">
@@ -40,6 +39,10 @@
         >
           <img :src="require('./assets/images/'+ numTransformIcon(card.num) +'.png')" width="100" heigth="154">
         </div>
+        <div class="base_card base_empty"
+          v-show="isEmpty(base)"
+          :style="{top:calY(1)-2+'px', left:calX(col)-2+'px'}"
+        ></div>
       </div>
     </div>
 
@@ -69,7 +72,6 @@ export default {
         tempPut: ['','','',''],
         sort: [[],[],[],[]]
       },
-      dragItem: {},
       dragItem_test: {
         type:'',
         posTop: 0,
@@ -90,20 +92,14 @@ export default {
         sort: []
       },
       firstCardXY:{
-        x: '',
-        y: ''
+        x: 385,
+        y: 255
       },
       tempStartX: '',
       tempStarty: '',
-      lastTimeStemp: ''
+      lastTimeStemp: '',
+      canMoveCardAmount: 0,
     }
-  },
-  created() {
-    this.getRandomNum(52, this.definAry);
-    document.documentElement.addEventListener('mousemove', (e)=>{
-      this.mousex = e.clientX;
-      this.mousey = e.clientY;
-    });
   },
   mounted() {
     this.init();
@@ -132,15 +128,20 @@ export default {
         this.presetPutBoxXY.sort.push(sortObj);
       }
 
-      // console.log(this.$refs['base_card00'][0].getBoundingClientRect());
-      this.firstCardXY.x = this.$refs['base_card00'][0].getBoundingClientRect().x;
-      this.firstCardXY.y = this.$refs['base_card00'][0].getBoundingClientRect().y;
+      this.shuffle();
     },
-    // random number
-    getRandomNum(num, arr) {
-      // concat definAry
-      let theAry = [].concat(arr); 
-      let baseIndex = 0, row = 1;
+    restart() {
+      this.putCard = {
+        base: [[],[],[],[],[],[],[],[]],
+        tempPut: ['','','',''],
+        sort: [[],[],[],[]]
+      },
+      this.shuffle();
+    },
+    // shuffle
+    shuffle() {
+      let theAry = [].concat(this.definAry); 
+      let baseIndex = 0, row = 1, num =52;
 
       for(let i=0;i<num;i++){
         let n=Math.floor(Math.random()*theAry.length);
@@ -162,7 +163,7 @@ export default {
         theAry.splice(n,1);
       }
     },
-    // num to path
+    // num ~> path
     numTransformIcon(num) {
       // 梅花: Clubs 1~13, 方塊: Diamonds 14~26, 愛心: Hearts 27~39, 黑桃: Spades 40~52
       let ary = [], iconPath, typeText;
@@ -179,10 +180,14 @@ export default {
     },
     // mouse Event
     mounsedownEvent(e, card, col, row, type, tempIndex) {
+      //reset dragitem position
+      this.dragItem_test.posTop = 0;
+      this.dragItem_test.posLeft = 0;
       // 避免返回未完成就執行
       if(this.lastTimeStemp && this.lastTimeStemp + 250 > e.timeStamp) return;
 
-      // ----------------- drag分離
+      // ----------------- drag black
+      if(!card) return;
       if(type != 'temp' && !this.isCanDrag(card, col, row)) return;
 
       this.dragItem_test.col = col;
@@ -201,13 +206,10 @@ export default {
         this.dragItem_test.cards[0].posLeft = 0;
         this.putCard.tempPut[tempIndex] = '';
       } else {
-        let lestNum = this.putCard.base[col].length;
-        this.dragItem_test.cards = this.putCard.base[col].splice(row, lestNum - row);
+        let baselength = this.putCard.base[col].length;
+        this.dragItem_test.cards = this.putCard.base[col].splice(row, baselength - row);
       }
       // -----------------
-
-      this.dragItem = card;
-      this.dragItem.col = col;
 
       this.mouseStartX = e.clientX;
       this.mouseStartY = e.clientY;
@@ -236,8 +238,6 @@ export default {
       let me = this;
       this.lastTimeStemp = e.timeStamp;
       let isSucceedDrag = false;
-      // let dragItemBaseCol = this.dragItem.col;
-      // let dragBaseLastIndex = this.putCard.base[dragItemBaseCol].length - 1;
 
       let dragItem_quantity = this.dragItem_test.cards.length;
       // 判斷拖曳方塊 tempPut or sort
@@ -246,19 +246,25 @@ export default {
       }
 
       // stack
+      let moveEmptyPosition = false;
       if(!isSucceedDrag) {
         for(let col=0; col<8; col++) {
+
           let lastIndex = this.putCard.base[col].length-1;
           let baseBoundX = this.firstCardXY.x + 150*col;
           let baseBoundY_last = this.firstCardXY.y + lastIndex*35;
           // 位置
           if(baseBoundX < e.clientX &&  e.clientX < baseBoundX + 100 && baseBoundY_last < e.clientY && e.clientY < baseBoundY_last + 153) {
-            // 數值
-            if(this.isStack(col, lastIndex)) {
-              this.putCard.base[col].push(this.dragItem);
-              // this.putCard.base[dragItemBaseCol].splice(dragBaseLastIndex, 1);
+            // 放置位置為空
+            if(this.putCard.base[col].length == 0) moveEmptyPosition = true;
+            // 移動數量 && 可推疊
+            if(this.judgMoveAmount(moveEmptyPosition) && this.isStack(col, lastIndex)) {
+              for(let i=0; i<this.dragItem_test.cards.length; i++) {
+                this.putCard.base[col].push(this.dragItem_test.cards[i]);
+                this.dragItem_test.type = '';
+              }
+              this.dragItem_test.cards = [];
               isSucceedDrag = true;
-              type = 'stack'
             }
             break;
           }
@@ -316,8 +322,6 @@ export default {
       }
       if(isSucceedDrag) {
         this.dragItem_test.cards = [];
-        this.dragItem_test.posTop = 0;
-        this.dragItem_test.posLeft = 0;
         this.dragItem_test.type = '';
         this.lastTimeStemp = '';
         return true;
@@ -341,20 +345,43 @@ export default {
         else return false;
       }
     },
+    judgMoveAmount(isEmptyPosition) {
+      let canMoveCardAmount = 0;
+      let baseAmount = 0;
+      let dragAmount = this.dragItem_test.cards.length;
+      for(let i=0; i<4; i++) {
+        if(this.putCard.tempPut[i] == '') {
+          canMoveCardAmount++;
+        }
+      }
+      for(let j=0; j<8; j++) {
+        if(this.putCard.base[j].length == 0) {
+          baseAmount++;
+        }
+      }
+      if(isEmptyPosition) {
+        return dragAmount <= (canMoveCardAmount+1)*(baseAmount);
+      } else {
+        return dragAmount <= (canMoveCardAmount+1)*(baseAmount+1);
+      }
+
+    },
     isCanDrag(card, col, row) {
       let result = false;
       let totalLength = this.putCard.base[col].length;
 
-      if(card.num == this.putCard.base[col][row].num) return true;
+      // 單張
+      if(card.num == this.putCard.base[col][totalLength-1].num) return true;
       
+      // 多張
       for(let r=row; row<totalLength; row++) {
         if(!this.putCard.base[col][r+1]) break;
-        let card = this.numTransformIcon(this.putCard.base[col][r].num).split('_');
-        let cardColor = (card[1] == 'Clubs' || card[1] == 'Spades') ? 'black' : 'red';
+        let selectCard = this.numTransformIcon(this.putCard.base[col][r].num).split('_');
+        let cardColor = (selectCard[1] == 'Clubs' || selectCard[1] == 'Spades') ? 'black' : 'red';
         let nextCard = this.numTransformIcon(this.putCard.base[col][r+1].num).split('_');
         let nextColor = (nextCard[1] == 'Clubs' || nextCard[1] == 'Spades') ? 'black' : 'red';
 
-        if(card[0] == nextCard[0]-1 && cardColor != nextColor) {
+        if(selectCard[0]-1 == nextCard[0] && cardColor != nextColor) {
           result = true;
         } else {
           result = false;
@@ -364,18 +391,30 @@ export default {
       return result;
     },
     isStack(col, lastIndex) {
-      let dragAry = this.numTransformIcon(this.dragItem.num).split('_');
+      let dragAry = this.numTransformIcon(this.dragItem_test.cards[0].num).split('_');
       let dragColor = (dragAry[1] == 'Clubs' || dragAry[1] == 'Spades') ? 'black' : 'red';
-      let ppCardAry = this.numTransformIcon(this.putCard.base[col][lastIndex].num).split('_');
-      let ppCardColor = (ppCardAry[1] == 'Clubs' || ppCardAry[1] == 'Spades') ? 'black' : 'red';
+      let ppCardAry, ppCardColor;
+      if(lastIndex != -1) {
+        ppCardAry = this.numTransformIcon(this.putCard.base[col][lastIndex].num).split('_');
+        ppCardColor = (ppCardAry[1] == 'Clubs' || ppCardAry[1] == 'Spades') ? 'black' : 'red';
+      }
 
-      if(dragColor != ppCardColor && dragAry[0] == ppCardAry[0]-1) {
-        this.dragItem.posLeft = this.putCard.base[col][lastIndex].posLeft;
-        this.dragItem.posTop = this.putCard.base[col][lastIndex].posTop + 35;
+      if(lastIndex == -1 || dragColor != ppCardColor && dragAry[0] == ppCardAry[0]-1) {
+        for(let i=0; i<this.dragItem_test.cards.length; i++) {
+          this.dragItem_test.cards[i].posLeft = this.calX(col);
+          this.dragItem_test.cards[i].posTop = this.calY(lastIndex+i+2);
+        }
         return true;
       } else {
         return false;
       }      
+    },
+    isEmpty(ary) {
+      if(ary.length == 0) return true;
+      else return false;
+    },
+    calCanMoveCardAmount() {
+      this.canMoveCardAmount = 0;
     },
     // cal x, y
     calY(row) {
@@ -401,6 +440,8 @@ body {
   width: 1200px;
   height: 937px;
   position: relative;
+  user-select: none;
+  -webkit-user-select: none; 
 }
 
 .header {
@@ -413,7 +454,6 @@ body {
     line-height: 50px;
     padding: 0px 10px;
     box-sizing: border-box;
-    // z-index: 4;
   }
   .title{
     font-size: 20px;
@@ -461,16 +501,21 @@ body {
 }
 
 .card_block {
-
   .base_row {
     width:100px;
     float: left;
   }
-
   .base_card{
     position: absolute;
   }
+  .base_empty{
+    width: 100px;
+    height: 154px;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+  }
 }
+
 .drag_block {
   position: absolute;
   .drag_card {
