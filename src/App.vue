@@ -1,7 +1,7 @@
 <template>
   <div class="main">
     <div class="header">
-      <div class="top">
+      <div class="top"> 
         <div class="title">Freecell</div>
         <div class="countAndTime">count | time</div>
         <div class="btn">
@@ -11,6 +11,7 @@
       <div class="putBox_block">
         <div ref="tempPut_rect" style="margin-right: 88px; position:relative">
           <div v-for="(item, index) in putCard.tempPut" :key="index"
+            :ref="'temp_card'+index"
             :class="{'putBox': !item, 'tempPut': item}"
             @mousedown="(e)=>{mounsedownEvent(e, item, '', '', 'temp', index)}"
           >
@@ -31,7 +32,7 @@
     <div class="card_block">
       <div v-for="(base, col) in putCard.base" :key="col" class="base_row">
         <div class="base_card" 
-          v-for="(card, row) in base" 
+          v-for="(card, row) in base"
           :ref="'base_card'+row+col"
           :key="row"
           :style="{top:card.posTop+'px', left:card.posLeft+'px'}"
@@ -40,6 +41,7 @@
           <img :src="require('./assets/images/'+ numTransformIcon(card.num) +'.png')" width="100" heigth="154">
         </div>
         <div class="base_card base_empty"
+          :ref="'base_card'+col"
           v-show="isEmpty(base)"
           :style="{top:calY(1)-2+'px', left:calX(col)-2+'px'}"
         ></div>
@@ -90,10 +92,6 @@ export default {
       presetPutBoxXY: {
         tempPut: [],
         sort: []
-      },
-      firstCardXY:{
-        x: 385,
-        y: 255
       },
       tempStartX: '',
       tempStarty: '',
@@ -199,8 +197,8 @@ export default {
         this.dragItem_test.tempIndex = tempIndex;
         this.dragItem_test.cards.push(this.putCard.tempPut[tempIndex]);
         this.tempStartX = 107 + tempIndex *114;
-        this.tempStartY = 69;
-        this.dragItem_test.posTop = 69;
+        this.tempStartY = this.presetPutBoxXY.tempPut[0].y;
+        this.dragItem_test.posTop = this.presetPutBoxXY.tempPut[0].y;
         this.dragItem_test.posLeft = 107 + tempIndex *114;
         this.dragItem_test.cards[0].posTop = 0;
         this.dragItem_test.cards[0].posLeft = 0;
@@ -219,7 +217,6 @@ export default {
       
       document.documentElement.addEventListener('mousemove', this.mousemoveEvent);
       document.documentElement.addEventListener('mouseup', this.mouseupEvent);
-      
     },
     mousemoveEvent(e) {
       let moveLeft, moveTop;
@@ -249,16 +246,18 @@ export default {
       let moveEmptyPosition = false;
       if(!isSucceedDrag) {
         for(let col=0; col<8; col++) {
-
+          // let xxxx = this.$refs['base_card0'][0].getBoundingClientRect().x;
           let lastIndex = this.putCard.base[col].length-1;
-          let baseBoundX = this.firstCardXY.x + 150*col;
-          let baseBoundY_last = this.firstCardXY.y + lastIndex*35;
+          let firstBaseX = this.$refs['base_card00'][0] ? this.$refs['base_card00'][0].getBoundingClientRect().x : this.$refs['base_card0'][0].getBoundingClientRect().x;
+          let firstBaseY = this.$refs['base_card00'][0] ? this.$refs['base_card00'][0].getBoundingClientRect().y : this.$refs['base_card0'][0].getBoundingClientRect().y;
+          let baseBoundX = firstBaseX + 150*col;
+          let baseBoundY_last = firstBaseY + lastIndex*35;
           // 位置
           if(baseBoundX < e.clientX &&  e.clientX < baseBoundX + 100 && baseBoundY_last < e.clientY && e.clientY < baseBoundY_last + 153) {
             // 放置位置為空
             if(this.putCard.base[col].length == 0) moveEmptyPosition = true;
             // 移動數量 && 可推疊
-            if(this.judgMoveAmount(moveEmptyPosition) && this.isStack(col, lastIndex)) {
+            if(this.judgMoveAmount(moveEmptyPosition, col) && this.isStack(col, lastIndex)) {
               for(let i=0; i<this.dragItem_test.cards.length; i++) {
                 this.putCard.base[col].push(this.dragItem_test.cards[i]);
                 this.dragItem_test.type = '';
@@ -275,8 +274,9 @@ export default {
       if(!isSucceedDrag) {
         this.dragItem_test.returning = true;
         if(this.dragItem_test.type=='temp') {
-          this.dragItem_test.posTop = 69;
+          this.dragItem_test.posTop = this.presetPutBoxXY.tempPut[0].y;
           this.dragItem_test.posLeft = 107 + this.dragItem_test.tempIndex *114;
+          let xxx = this.presetPutBoxXY.tempPut[0].x;
         } else {
           this.dragItem_test.posTop = 0;
           this.dragItem_test.posLeft = 0;
@@ -345,7 +345,9 @@ export default {
         else return false;
       }
     },
-    judgMoveAmount(isEmptyPosition) {
+    judgMoveAmount(isEmptyPosition, col) {
+      if(this.dragItem_test.type == 'temp') return true;
+
       let canMoveCardAmount = 0;
       let baseAmount = 0;
       let dragAmount = this.dragItem_test.cards.length;
@@ -355,7 +357,7 @@ export default {
         }
       }
       for(let j=0; j<8; j++) {
-        if(this.putCard.base[j].length == 0) {
+        if(this.putCard.base[j].length == 0 && this.dragItem_test.col != j) {
           baseAmount++;
         }
       }
@@ -503,7 +505,7 @@ body {
 .card_block {
   .base_row {
     width:100px;
-    float: left;
+    // float: left;
   }
   .base_card{
     position: absolute;
